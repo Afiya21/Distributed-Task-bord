@@ -29,4 +29,25 @@ func RegisterRoutes(router *gin.Engine) {
 
 		c.JSON(http.StatusOK, gin.H{"message": "User registered", "user": user})
 	})
+
+	// Login route
+	router.POST("/login", func(c *gin.Context) {
+		var loginInput struct {
+			Email    string `json:"email"`
+			Password string `json:"password"`
+		}
+
+		if err := c.BindJSON(&loginInput); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+			return
+		}
+
+		token, err := auth.LoginUser(loginInput.Email, loginInput.Password)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Login successful", "token": token})
+	})
 }
