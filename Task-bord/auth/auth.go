@@ -6,6 +6,7 @@ import (
 	"task-board/db"
 	"task-board/models"
 
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -50,6 +51,8 @@ func RegisterUser(email, password, role string) (*models.User, error) {
 		return nil, err
 	}
 
-	user.ID = result.InsertedID.(string) // Convert to string ID
+	// Convert the ObjectID to a string
+	user.ID = result.InsertedID.(primitive.ObjectID).Hex()
+
 	return &user, nil
 }
