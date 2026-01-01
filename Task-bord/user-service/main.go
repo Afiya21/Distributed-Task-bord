@@ -14,5 +14,5 @@ func main() {
 	r.POST("/login", routes.LoginUser)       // User Login
 
 	// Run the server
-	r.Run(":8080") // Run on port 8080
+	r.Run(":8087") // Run on port 8087
 }
