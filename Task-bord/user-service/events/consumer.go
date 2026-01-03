@@ -6,6 +6,7 @@ import (
 	"user-service/db"
 	"user-service/models"
 
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -41,6 +42,7 @@ func handleUserRegistered(payload interface{}) {
 	email, _ := data["email"].(string)
 	role, _ := data["role"].(string)
 	idStr, _ := data["userId"].(string)
+	username, _ := data["username"].(string) // Extract username
 
 	// In a real app we might want to store more info or fetch it using the ID
 	// valid mongo ID?
@@ -64,20 +66,28 @@ func handleUserRegistered(payload interface{}) {
 	collection := client.Database("user-management-service").Collection("users")
 
 	// Check if user exists (idempotency)
-	// For now just insert/upsert logic could be here.
-	// Simplified: Create struct and insert.
+	existingCount, err := collection.CountDocuments(ctx, bson.M{"_id": objID})
+	if err != nil {
+		log.Printf("Error checking existing user: %v", err)
+		return
+	}
+	if existingCount > 0 {
+		log.Printf("User %s already exists, skipping sync.", email)
+		return
+	}
 
 	newUser := models.User{
-		ID:    objID,
-		Email: email,
-		Role:  role,
-		// Username? Payload might need it if we want it.
+		ID:       objID,
+		Email:    email,
+		Role:     role,
+		Username: username, // Save username
+		Theme:    "light",  // Default theme
 	}
 
 	_, err = collection.InsertOne(ctx, newUser)
 	if err != nil {
 		log.Printf("Failed to insert synced user: %v", err)
 	} else {
-		log.Println("User synced successfully")
+		log.Printf("User %s (ID: %s) synced successfully to User Service DB", email, idStr)
 	}
 }

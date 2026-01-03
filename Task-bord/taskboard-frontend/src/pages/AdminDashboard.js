@@ -2,16 +2,21 @@ import React, { useState, useEffect } from 'react';
 import api from '../api';
 import websocketService from '../services/websocketService';
 import Notifications from '../components/Notifications';
+import Modal from '../components/Modal';
 
 const AdminDashboard = () => {
     const [tasks, setTasks] = useState([]);
     const [users, setUsers] = useState([]);
     const [title, setTitle] = useState('');
     const [selectedUsers, setSelectedUsers] = useState([]);
+    const [currentSelection, setCurrentSelection] = useState('');
     const [activeTab, setActiveTab] = useState('tasks');
+    const [showSuccess, setShowSuccess] = useState(false);
     const [currentUserId, setCurrentUserId] = useState(null); // To store logged in admin ID for notifications
 
     const [username, setUsername] = useState('');
+    const [userEmail, setUserEmail] = useState('');
+    const [userRole, setUserRole] = useState('');
     const [theme, setTheme] = useState('light');
 
     // ... existing filters state ...
@@ -41,6 +46,11 @@ const AdminDashboard = () => {
                 }).join(''));
                 const decoded = JSON.parse(jsonPayload);
                 setCurrentUserId(decoded.user_id);
+                // Set initial profile from token
+                setUsername(decoded.username || '');
+                setUserEmail(decoded.email || '');
+                setUserRole(decoded.role || 'admin');
+
                 fetchUserProfile(decoded.user_id);
             } catch (error) {
                 console.error("Error decoding token", error);
@@ -55,6 +65,8 @@ const AdminDashboard = () => {
             const me = res.data.find(u => u.id === uid);
             if (me) {
                 setUsername(me.username || '');
+                setUserEmail(me.email || '');
+                setUserRole(me.role || 'admin');
                 if (me.theme) {
                     setTheme(me.theme);
                     applyTheme(me.theme);
@@ -108,12 +120,27 @@ const AdminDashboard = () => {
         e.preventDefault();
         try {
             await api.createTask({ title, assignedTo: selectedUsers });
-            fetchTasks();
-            setTitle('');
-            setSelectedUsers([]);
-            alert('Task created!');
+            fetchTasks(); // Refresh list
+            setTitle(''); // Clear title
+            setSelectedUsers([]); // Clear assigned users
+            setCurrentSelection(''); // Reset dropdown
+            setShowSuccess(true); // Show success modal
+            setTimeout(() => setShowSuccess(false), 2000); // Auto close
         } catch (err) {
             alert('Failed to create task');
+        }
+    };
+
+    const promoteToAdmin = async (userId) => {
+        if (window.confirm('Are you sure you want to promote this user to Admin?')) {
+            try {
+                await api.updateUserRole(userId, 'admin');
+                alert('User promoted successfully');
+                fetchUsers();
+            } catch (err) {
+                console.error(err);
+                alert('Failed to promote user');
+            }
         }
     };
 
@@ -159,14 +186,28 @@ const AdminDashboard = () => {
 
                                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                                     <select
+                                        className="custom-select"
+                                        value={currentSelection}
                                         onChange={(e) => {
-                                            if (e.target.value && !selectedUsers.includes(e.target.value)) {
-                                                setSelectedUsers([...selectedUsers, e.target.value]);
+                                            const val = e.target.value;
+                                            setCurrentSelection(val);
+                                            if (val && !selectedUsers.includes(val)) {
+                                                setSelectedUsers([...selectedUsers, val]);
+                                                // Optional: Reset immediately if we want to allow rapid multiple creation? 
+                                                // But usually user wants to see what they picked? 
+                                                // Actually, if it adds a tag below, the dropdown should probably reset to allow picking another?
+                                                // User specific request: "after task is created".
+                                                // So I will only reset on submit? 
+                                                // If I don't reset here, the dropdown shows the selected user.
+                                                // If I reset here (to ""), then it's "blank" (default) immediately.
+                                                // The tags show who is selected.
+                                                // Let's reset it immediately so they can pick multiple easily.
+                                                // setCurrentSelection(''); // User wants it to stay selected until submit
                                             }
                                         }}
                                         style={{ flex: 1 }}
                                     >
-                                        <option value="">Assign to User...</option>
+                                        <option value="">Assigned To</option>
                                         {users.map(u => (
                                             <option key={u.id} value={u.id}>
                                                 {u.username && u.username.trim() !== "" ? u.username : u.email} ({u.role})
@@ -298,12 +339,22 @@ const AdminDashboard = () => {
                         <h3>Profile Settings</h3>
 
                         <div className="form-group">
-                            <label>Display Name</label>
-                            <input
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
-                                placeholder="Enter your display name"
-                            />
+                            <label>Profile Information</label>
+                            <div style={{
+                                background: 'rgba(255, 255, 255, 0.05)',
+                                padding: '1.5rem',
+                                borderRadius: '0.5rem',
+                                border: '1px solid var(--border-color)',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '0.5rem'
+                            }}>
+                                <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{username}</div>
+                                <div style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span>📧 {userEmail}</span>
+                                    <span className="badge" style={{ background: 'var(--accent-color)', fontSize: '0.7rem' }}>{userRole}</span>
+                                </div>
+                            </div>
                         </div>
 
                         <div className="form-group">
@@ -344,37 +395,51 @@ const AdminDashboard = () => {
                 {activeTab === 'users' && (
                     <div className="card">
                         <h3>User Management</h3>
-                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <table className="table" style={{ width: '100%', borderCollapse: 'collapse', marginTop: '1rem', tableLayout: 'fixed' }}>
                             <thead>
-                                <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border-color)' }}>
-                                    <th style={{ padding: '1rem' }}>Email</th>
-                                    <th style={{ padding: '1rem' }}>Role</th>
-                                    <th style={{ padding: '1rem' }}>ID</th>
-                                    <th style={{ padding: '1rem' }}>Actions</th>
+                                <tr style={{ borderBottom: '1px solid var(--border-color)', textAlign: 'left' }}>
+                                    <th style={{ padding: '0.75rem', width: '25%' }}>Full Name</th>
+                                    <th style={{ padding: '0.75rem', width: '35%' }}>Email</th>
+                                    <th style={{ padding: '0.75rem', width: '15%' }}>Role</th>
+                                    <th style={{ padding: '0.75rem', width: '25%' }}>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {users.map(u => (
-                                    <tr key={u.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                                        <td style={{ padding: '1rem' }}>{u.email}</td>
-                                        <td style={{ padding: '1rem' }}><span className="badge" style={{ background: u.role === 'admin' ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)' }}>{u.role}</span></td>
-                                        <td style={{ padding: '1rem', fontFamily: 'monospace', fontSize: '0.8rem' }}>{u.id}</td>
-                                        <td style={{ padding: '1rem' }}>
-                                            {u.role !== 'admin' && (
+                                {users.map(user => (
+                                    <tr key={user.id} style={{ borderBottom: '1px solid var(--border-color)', textAlign: 'left' }}>
+                                        <td style={{ padding: '0.75rem', width: '25%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            {user.username || 'N/A'}
+                                        </td>
+                                        <td style={{ padding: '0.75rem', width: '35%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            {user.email}
+                                        </td>
+                                        <td style={{ padding: '0.75rem', width: '15%' }}>
+                                            <span style={{
+                                                padding: '0.25rem 0.5rem',
+                                                borderRadius: '1rem',
+                                                fontSize: '0.85rem',
+                                                backgroundColor: user.role === 'admin' ? 'rgba(99, 102, 241, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                                                color: user.role === 'admin' ? '#6366f1' : '#10b981'
+                                            }}>
+                                                {user.role}
+                                            </span>
+                                        </td>
+                                        <td style={{ padding: '0.75rem', width: '25%' }}>
+                                            {user.role !== 'admin' && (
                                                 <button
-                                                    style={{ padding: '0.5rem 1rem', fontSize: '0.8rem' }}
-                                                    onClick={async () => {
-                                                        if (window.confirm(`Promote ${u.email} to Admin?`)) {
-                                                            try {
-                                                                await api.updateUserRole(u.id, 'admin');
-                                                                alert('User promoted!');
-                                                                fetchUsers();
-                                                            } catch (err) {
-                                                                alert('Failed to promote user');
-                                                            }
-                                                        }
+                                                    onClick={() => promoteToAdmin(user.id)}
+                                                    style={{
+                                                        padding: '0.25rem 0.75rem',
+                                                        fontSize: '0.85rem',
+                                                        backgroundColor: 'transparent',
+                                                        border: '1px solid #6366f1',
+                                                        color: '#6366f1',
+                                                        borderRadius: '0.25rem',
+                                                        cursor: 'pointer'
                                                     }}
-                                                >Make Admin</button>
+                                                >
+                                                    Promote to Admin
+                                                </button>
                                             )}
                                         </td>
                                     </tr>
@@ -384,6 +449,12 @@ const AdminDashboard = () => {
                     </div>
                 )}
             </div>
+            <Modal
+                isOpen={showSuccess}
+                title="Task Created!"
+                message="The task has been successfully assigned."
+                icon="✅"
+            />
         </div>
     );
 };

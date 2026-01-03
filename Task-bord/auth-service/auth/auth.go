@@ -41,11 +41,13 @@ func comparePassword(hashedPassword, password string) bool {
 }
 
 // Generate JWT token
-func generateJWT(userID string, role string) (string, error) {
+func generateJWT(userID, role, email, username string) (string, error) {
 	claims := jwt.MapClaims{
-		"user_id": userID,
-		"role":    role,
-		"exp":     time.Now().Add(time.Hour * 24).Unix(),
+		"user_id":  userID,
+		"role":     role,
+		"email":    email,
+		"username": username,
+		"exp":      time.Now().Add(time.Hour * 24).Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	secretKey := []byte("your-secret-key") // Store securely in environment variables
@@ -54,10 +56,19 @@ func generateJWT(userID string, role string) (string, error) {
 }
 
 // Register a new user
-func RegisterUser(email, password, role string) (string, error) {
+func RegisterUser(email, password, role, username string) (string, error) {
 	collection := db.GetCollection("users")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	// Check if user already exists
+	count, err := collection.CountDocuments(ctx, bson.M{"email": email})
+	if err != nil {
+		return "", err
+	}
+	if count > 0 {
+		return "", fmt.Errorf("user with this email already exists")
+	}
 
 	hashedPassword, err := hashPassword(password)
 	if err != nil {
@@ -68,6 +79,7 @@ func RegisterUser(email, password, role string) (string, error) {
 		Email:    email,
 		Password: hashedPassword,
 		Role:     role,
+		Username: username,
 	}
 
 	// Insert user into the database
@@ -78,7 +90,7 @@ func RegisterUser(email, password, role string) (string, error) {
 
 	// Generate JWT token for the user
 	userID := result.InsertedID.(primitive.ObjectID).Hex()
-	token, err := generateJWT(userID, role)
+	token, err := generateJWT(userID, role, email, username)
 	if err != nil {
 		return "", err
 	}
@@ -86,9 +98,10 @@ func RegisterUser(email, password, role string) (string, error) {
 	// Publish UserRegistered event
 	if RabbitClient != nil {
 		eventPayload := map[string]string{
-			"userId": userID,
-			"email":  email,
-			"role":   role,
+			"userId":   userID,
+			"email":    email,
+			"role":     role,
+			"username": username,
 		}
 		err = RabbitClient.Publish("", "user_queue", "UserRegistered", eventPayload)
 		if err != nil {
@@ -111,16 +124,19 @@ func LoginUser(email, password string) (string, error) {
 	// Find the user by email
 	err := collection.FindOne(ctx, bson.M{"email": email}).Decode(&user)
 	if err != nil {
+		fmt.Printf("Login failed: User not found for email %s\n", email)
 		return "", fmt.Errorf("no user found with this email")
 	}
+	fmt.Printf("Login: Found user %s (ID: %s)\n", user.Email, user.ID.Hex())
 
 	// Compare the password with the stored hashed password
 	if !comparePassword(user.Password, password) {
+		fmt.Printf("Login failed: Password mismatch for user %s\n", email)
 		return "", fmt.Errorf("invalid password")
 	}
 
 	// Generate JWT token for the user
-	token, err := generateJWT(user.ID.Hex(), user.Role)
+	token, err := generateJWT(user.ID.Hex(), user.Role, user.Email, user.Username)
 	if err != nil {
 		return "", err
 	}

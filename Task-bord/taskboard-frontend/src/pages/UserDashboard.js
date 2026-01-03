@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import api from '../api';
 import websocketService from '../services/websocketService';
@@ -10,58 +11,61 @@ const UserDashboard = () => {
     const [userId, setUserId] = useState('');
     const [tab, setTab] = useState('tasks');
     const [username, setUsername] = useState('');
-
-    // Theme state
+    const [userEmail, setUserEmail] = useState('');
+    const [userRole, setUserRole] = useState('');
     const [theme, setTheme] = useState('light');
+    const [refreshKey, setRefreshKey] = useState(0); // Added for useEffect dependency
+    const navigate = useNavigate();
 
     useEffect(() => {
-        // Decode token to get user ID
+        // Decode token to get current user ID
         const token = localStorage.getItem('token');
         if (token) {
             try {
                 const decoded = jwtDecode(token);
                 setUserId(decoded.user_id);
-                fetchTasks(decoded.user_id);
-                fetchUserProfile(decoded.user_id); // Fetch profile data (theme/name)
-                // Connect WebSocket
-                websocketService.connect(decoded.user_id);
+                // Set initial profile from token
+                setUsername(decoded.username || '');
+                setUserEmail(decoded.email || '');
+                setUserRole(decoded.role || 'user');
+
+                fetchTasks(decoded.user_id); // Keep fetching tasks
+                fetchUser(decoded.user_id); // Fetch full profile (theme)
+                if (websocketService.connect) {
+                    websocketService.connect(decoded.user_id);
+                }
             } catch (e) {
                 console.error("Invalid token", e);
+                // Optionally redirect to login if token is invalid
+                localStorage.clear();
+                navigate('/login');
             }
+        } else {
+            // If no token, redirect to login
+            navigate('/login');
         }
         return () => {
             websocketService.disconnect();
         };
-    }, []);
+    }, [refreshKey]);
 
-    const fetchUserProfile = async (uid) => {
+    const fetchUser = async (uid) => {
         try {
-            // Need a new endpoint to get specific user profile, or loop from GetAllUsers (inefficient) or use Auth data?
-            // User Service usually has GetUserByID. Let's assume api.getUser(uid) exists or similar.
-            // If not, we might need to rely on what we have.
-            // Wait, we can use api.getUsers() and filter? Or simpler: 
-            // The user service likely supports GET /users/:id. Let's check api.js later.
-            // For now, let's assume we can fetch it. If not, we'll default to light.
-
-            // Actually, let's add a proper fetch here if the API supports it. 
-            // Checking api.js... existing one is getUsers -> list.
-            // Let's rely on standard practice: we need current user data.
-            // We can just rely on the user manually setting it for now if API is missing, 
-            // BUT to fix "first thing not working", we must fetch it.
-            // Let's implement fetchUser(uid).
-
-            // Temporarily using getUsers and filtering (not ideal but works for small scale)
             const res = await api.getUsers();
-            const me = res.data.find(u => u.id === uid);
-            if (me) {
-                setUsername(me.username || '');
-                if (me.theme) {
-                    setTheme(me.theme);
-                    applyTheme(me.theme);
+            if (res.data) {
+                const me = res.data.find(u => u.id === uid);
+                if (me) {
+                    setUsername(me.username || '');
+                    setUserEmail(me.email || '');
+                    setUserRole(me.role || 'user');
+                    if (me.theme) {
+                        setTheme(me.theme);
+                        applyTheme(me.theme);
+                    }
                 }
             }
         } catch (err) {
-            console.error("Failed to fetch profile", err);
+            console.error(err);
         }
     };
 
@@ -182,12 +186,22 @@ const UserDashboard = () => {
                         <h3>Profile Settings</h3>
 
                         <div className="form-group">
-                            <label>Display Name</label>
-                            <input
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
-                                placeholder="Enter your display name"
-                            />
+                            <label>Profile Information</label>
+                            <div style={{
+                                background: 'rgba(255, 255, 255, 0.05)',
+                                padding: '1.5rem',
+                                borderRadius: '0.5rem',
+                                border: '1px solid var(--border-color)',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '0.5rem'
+                            }}>
+                                <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{username}</div>
+                                <div style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span>📧 {userEmail}</span>
+                                    <span className="badge" style={{ background: 'rgba(255, 255, 255, 0.1)', fontSize: '0.7rem' }}>{userRole}</span>
+                                </div>
+                            </div>
                         </div>
 
                         <div className="form-group">

@@ -8,4 +8,5 @@ type User struct {
 	Email    string             `bson:"email"`
 	Password string             `bson:"password"`
 	Role     string             `bson:"role"`
+	Username string             `bson:"username"` // Add username field
 }

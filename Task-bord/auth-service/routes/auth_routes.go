@@ -15,6 +15,7 @@ func RegisterRoutes(r *gin.Engine) {
 			Email    string `json:"email"`
 			Password string `json:"password"`
 			Role     string `json:"role"`
+			Username string `json:"username"`
 		}
 
 		if err := c.BindJSON(&userInput); err != nil {
@@ -22,7 +23,7 @@ func RegisterRoutes(r *gin.Engine) {
 			return
 		}
 
-		token, err := auth.RegisterUser(userInput.Email, userInput.Password, userInput.Role)
+		token, err := auth.RegisterUser(userInput.Email, userInput.Password, userInput.Role, userInput.Username)
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return

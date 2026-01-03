@@ -9,7 +9,8 @@ const API_URLS = {
 
 const api = {
     login: (email, password) => axios.post(`${API_URLS.AUTH}/login`, { email, password }),
-    register: (email, password, role) => axios.post(`${API_URLS.AUTH}/register`, { email, password, role }),
+    login: (email, password) => axios.post(`${API_URLS.AUTH}/login`, { email, password }),
+    register: (email, password, role, username) => axios.post(`${API_URLS.AUTH}/register`, { email, password, role, username }),
 
     // Auth Service
     updateUserRole: (userId, role) => axios.put(`${API_URLS.AUTH}/users/${userId}/role`, { role }, {
