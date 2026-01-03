@@ -104,15 +104,9 @@ const UserDashboard = () => {
         return <span className={`badge badge-${s}`}>{status}</span>;
     };
 
-    const handleThemeChange = async (newTheme) => {
+    const handleThemeChange = (newTheme) => {
         setTheme(newTheme);
-        applyTheme(newTheme); // Apply visually immediately
-        try {
-            await api.updateUserProfile(userId, { theme: newTheme });
-        } catch (err) {
-            console.error(err);
-            alert('Failed to save theme preference');
-        }
+        applyTheme(newTheme); // Apply visually immediately (Preview)
     };
 
     return (
@@ -219,10 +213,10 @@ const UserDashboard = () => {
                         <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end' }}>
                             <button className="btn btn-primary" onClick={async () => {
                                 try {
-                                    await api.updateUserProfile(userId, { username });
-                                    alert('Profile updated successfully!');
+                                    await api.updateUserProfile(userId, { username, theme });
+                                    setTab('tasks'); // Redirect to main page
                                 } catch (e) {
-                                    alert('Failed to update profile');
+                                    // alert('Failed to update profile'); 
                                 }
                             }}>
                                 Save Changes

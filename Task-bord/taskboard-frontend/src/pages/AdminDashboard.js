@@ -11,7 +11,10 @@ const AdminDashboard = () => {
     const [activeTab, setActiveTab] = useState('tasks');
     const [currentUserId, setCurrentUserId] = useState(null); // To store logged in admin ID for notifications
 
-    // Filters
+    const [username, setUsername] = useState('');
+    const [theme, setTheme] = useState('light');
+
+    // ... existing filters state ...
     const [filterStatus, setFilterStatus] = useState('');
     const [filterUser, setFilterUser] = useState('');
 
@@ -38,11 +41,46 @@ const AdminDashboard = () => {
                 }).join(''));
                 const decoded = JSON.parse(jsonPayload);
                 setCurrentUserId(decoded.user_id);
+                fetchUserProfile(decoded.user_id);
             } catch (error) {
                 console.error("Error decoding token", error);
             }
         }
     }, [filterStatus, filterUser]); // Refetch when filters change
+
+    const fetchUserProfile = async (uid) => {
+        try {
+            // Reusing the same strategy as User Dashboard
+            const res = await api.getUsers();
+            const me = res.data.find(u => u.id === uid);
+            if (me) {
+                setUsername(me.username || '');
+                if (me.theme) {
+                    setTheme(me.theme);
+                    applyTheme(me.theme);
+                }
+            }
+        } catch (err) {
+            console.error("Failed to fetch profile", err);
+        }
+    };
+
+    const applyTheme = (t) => {
+        if (t === 'dark') {
+            document.body.style.backgroundColor = '#0f172a';
+            document.body.style.color = '#f8fafc';
+            document.body.classList.add('dark-mode');
+        } else {
+            document.body.style.backgroundColor = '#f4f7fa';
+            document.body.style.color = '#1e293b';
+            document.body.classList.remove('dark-mode');
+        }
+    };
+
+    const handleThemeChange = (newTheme) => {
+        setTheme(newTheme);
+        applyTheme(newTheme);
+    };
 
     const fetchTasks = async () => {
         try {
@@ -155,7 +193,7 @@ const AdminDashboard = () => {
                                     </div>
                                 )}
 
-                                <button type="submit" style={{ alignSelf: 'flex-start' }}>Create Task</button>
+                                <button type="submit" className="btn btn-primary" style={{ alignSelf: 'flex-start' }}>Create Task</button>
                             </form>
                         </div>
 
@@ -177,54 +215,128 @@ const AdminDashboard = () => {
                             </div>
                         </div>
 
-                        <div className="task-list">
-                            {tasks.map(task => (
-                                <div key={task.id} className="task-card">
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '1rem' }}>
-                                        <h4 style={{ margin: 0 }}>{task.title}</h4>
-                                        {getStatusBadge(task.status)}
-                                    </div>
+                        {/* Summary Stats */}
+                        <div className="stat-grid">
+                            <div className="stat-card">
+                                <span style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>👥</span>
+                                <div className="stat-value">{users.length}</div>
+                                <div className="stat-label">Total Users</div>
+                            </div>
+                            <div className="stat-card">
+                                <span style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>📝</span>
+                                <div className="stat-value">{tasks.filter(t => (t.status || 'OPEN') === 'OPEN').length}</div>
+                                <div className="stat-label">Open Tasks</div>
+                            </div>
+                            <div className="stat-card">
+                                <span style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>🚧</span>
+                                <div className="stat-value">{tasks.filter(t => t.status === 'IN_PROGRESS').length}</div>
+                                <div className="stat-label">In Progress</div>
+                            </div>
+                            <div className="stat-card">
+                                <span style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>✅</span>
+                                <div className="stat-value">{tasks.filter(t => t.status === 'DONE').length}</div>
+                                <div className="stat-label">Completed</div>
+                            </div>
+                        </div>
 
-                                    <hr style={{ borderColor: 'var(--border-color)', margin: '1rem 0' }} />
+                        <div className="kanban-board">
+                            {['OPEN', 'IN_PROGRESS', 'DONE'].map(status => {
+                                const columnTasks = tasks.filter(t => (t.status || 'OPEN') === status);
+                                const statusLabel = status === 'IN_PROGRESS' ? 'In Progress' : status.charAt(0) + status.slice(1).toLowerCase();
 
-                                    <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                                        <div style={{ marginBottom: '0.5rem' }}>Assigned To:</div>
-                                        <div className="flex" style={{ flexWrap: 'wrap' }}>
-                                            {(task.assignedTo || []).length > 0 ? (task.assignedTo || []).map(id => {
-                                                const u = users.find(user => user.id === id);
-                                                return <span key={id} style={{ color: 'var(--text-primary)' }}>• {u ? u.email : id}</span>;
-                                            }) : <span>Unassigned</span>}
+                                return (
+                                    <div key={status} className="kanban-column">
+                                        <div className="kanban-header">
+                                            <span>{statusLabel}</span>
+                                            <span className="badge" style={{ background: 'rgba(255,255,255,0.1)', fontSize: '0.7rem' }}>{columnTasks.length}</span>
                                         </div>
+
+                                        {columnTasks.map(task => (
+                                            <div key={task.id} className="kanban-task-card">
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem' }}>
+                                                    <h4 style={{ margin: 0, fontSize: '1rem' }}>{task.title}</h4>
+                                                </div>
+
+                                                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                                    <div style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                        <span>Assigned to:</span>
+                                                        <div className="flex" style={{ flexWrap: 'wrap', gap: '0.25rem' }}>
+                                                            {(task.assignedTo || []).length > 0 ? (task.assignedTo || []).map(id => {
+                                                                const u = users.find(user => user.id === id);
+                                                                return (
+                                                                    <span key={id} style={{
+                                                                        background: 'rgba(255,255,255,0.1)',
+                                                                        padding: '2px 6px',
+                                                                        borderRadius: '4px',
+                                                                        fontSize: '0.75rem',
+                                                                        color: 'var(--text-primary)'
+                                                                    }}>
+                                                                        {u ? (u.username || u.email.split('@')[0]) : 'User'}
+                                                                    </span>
+                                                                );
+                                                            }) : <span style={{ fontStyle: 'italic' }}>Unassigned</span>}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+
+                                        {columnTasks.length === 0 && (
+                                            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)', fontStyle: 'italic', fontSize: '0.9rem' }}>
+                                                No tasks
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </>
                 )}
 
                 {activeTab === 'settings' && (
-                    <div className="card" style={{ maxWidth: '500px' }}>
+                    <div className="card" style={{ maxWidth: '600px', margin: '0 auto' }}>
                         <h3>Profile Settings</h3>
-                        <div style={{ marginBottom: '1rem' }}>
+
+                        <div className="form-group">
                             <label>Display Name</label>
-                            {/* Assuming Admin can also update their own user profile using User Service */}
-                            {/* In a real app we'd fetch the current user's profile first. */}
                             <input
-                                placeholder="Update your display name"
-                                onBlur={async (e) => {
-                                    // Hack: Admin ID isn't stored in state easily, need to decode token again
-                                    // or just assume we can't easily do it without refactoring.
-                                    // Let's toggle a simple alert for now or implement properly if time permits.
-                                    // Actually we can get ID from localStorage token decode.
-                                    // But let's skip complex state for "Admin Settings" to keep it simple unless strictly needed.
-                                    // User asked for "admin settings like changing name".
-                                    // I'll add logic to get my own ID.
-                                    alert('Please use the User Dashboard to update your profile (Admins are Users too!)');
-                                }}
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
+                                placeholder="Enter your display name"
                             />
-                            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                                Since you are an Admin, you can also manage system-wide settings here in the future.
-                            </p>
+                        </div>
+
+                        <div className="form-group">
+                            <label>Appearance</label>
+                            <div className="settings-grid">
+                                <div
+                                    className={`theme-card ${theme === 'light' ? 'active' : ''}`}
+                                    onClick={() => handleThemeChange('light')}
+                                >
+                                    <span className="theme-icon">☀️</span>
+                                    <h4>Light Mode</h4>
+                                </div>
+                                <div
+                                    className={`theme-card ${theme === 'dark' ? 'active' : ''}`}
+                                    onClick={() => handleThemeChange('dark')}
+                                >
+                                    <span className="theme-icon">🌙</span>
+                                    <h4>Dark Mode</h4>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end' }}>
+                            <button className="btn btn-primary" onClick={async () => {
+                                try {
+                                    await api.updateUserProfile(currentUserId, { username, theme });
+                                    setActiveTab('tasks');
+                                } catch (e) {
+                                    // Silent fail
+                                }
+                            }}>
+                                Save Changes
+                            </button>
                         </div>
                     </div>
                 )}
