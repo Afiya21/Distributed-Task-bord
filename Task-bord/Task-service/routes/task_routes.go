@@ -1,134 +1,221 @@
 package routes
 
 import (
+	"net/http"
+	"time"
+
 	"Task-service/db"
 	"Task-service/models"
-	"time"
+	"Task-service/rabbitmq"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// CreateTask handles the creation of a new task
+// CreateTask handles POST /tasks
 func CreateTask(c *gin.Context) {
 	var task models.Task
-	if err := c.BindJSON(&task); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+
+	// 1. Parse request body
+	if err := c.ShouldBindJSON(&task); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	task.CreatedAt = time.Now().Format(time.RFC3339)
-	client, ctx, cancel := db.ConnectDB()
+	// 2. Set task metadata
+	task.ID = primitive.NewObjectID()
+	task.CreatedAt = time.Now()
+	task.UpdatedAt = time.Now()
+	task.Status = "OPEN"
+
+	// 3. Connect to DB
+	// 3. Connect to DB
+	client, ctx, cancel, err := db.ConnectDB()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection failed", "details": err.Error()})
+		return
+	}
 	defer cancel()
+	defer client.Disconnect(ctx)
 
 	collection := client.Database("taskboard").Collection("tasks")
 
-	result, err := collection.InsertOne(ctx, task)
+	// 4. Insert task into MongoDB
+	_, err = collection.InsertOne(ctx, task)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create task"})
 		return
 	}
 
-	c.JSON(201, gin.H{"message": "Task created", "task_id": result.InsertedID})
+	// Convert ObjectIDs to strings
+	var assignedTo []string
+	for _, id := range task.AssignedTo {
+		assignedTo = append(assignedTo, id.Hex())
+	}
+
+	// 5. Publish event to RabbitMQ (EVENT-DRIVEN COMMUNICATION)
+	rabbitmq.PublishTaskCreated(
+		task.ID.Hex(),
+		task.Title,
+		assignedTo,
+	)
+
+	// 6. Return response
+	c.JSON(http.StatusCreated, task)
 }
 
-// GetTasks retrieves all tasks
+// GetTasks handles GET /tasks
 func GetTasks(c *gin.Context) {
-	client, ctx, cancel := db.ConnectDB()
+	client, ctx, cancel, err := db.ConnectDB()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection failed"})
+		return
+	}
 	defer cancel()
+	defer client.Disconnect(ctx)
 
 	collection := client.Database("taskboard").Collection("tasks")
-	cursor, err := collection.Find(ctx, bson.M{})
+
+	// Build filter from query params
+	filter := bson.M{}
+	status := c.Query("status")
+	if status != "" {
+		filter["status"] = status
+	}
+	priority := c.Query("priority")
+	if priority != "" {
+		filter["priority"] = priority
+	}
+	assignedTo := c.Query("assignedTo")
+	if assignedTo != "" {
+		// assignedTo is stored as a list of ObjectIDs.
+		// We need to match if the array contains this ID.
+		objID, err := primitive.ObjectIDFromHex(assignedTo)
+		if err == nil {
+			filter["assignedTo"] = objID
+		}
+	}
+
+	// Find options for sorting
+	findOptions := options.Find()
+	sortBy := c.Query("sortBy")
+	if sortBy == "priority" {
+		// Custom sort for priority might be tricky without integer values (High>Med>Low).
+		// For strings "high", "medium", "low", alphabetical might not work.
+		// For now simple sort, or better: Client can sort.
+		// Let's assume sorting by CreatedAt descending by default.
+		findOptions.SetSort(bson.D{{Key: "created_at", Value: -1}})
+	} else if sortBy == "date" {
+		findOptions.SetSort(bson.D{{Key: "due_date", Value: 1}})
+	} else {
+		// Default sort by CreatedAt desc
+		findOptions.SetSort(bson.D{{Key: "created_at", Value: -1}})
+	}
+
+	cursor, err := collection.Find(ctx, filter, findOptions)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch tasks"})
 		return
 	}
+	defer cursor.Close(ctx)
 
-	var tasks []models.Task
-	if err := cursor.All(ctx, &tasks); err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
+	tasks := []models.Task{} // Initialize as empty slice to return [] instead of null
+	for cursor.Next(ctx) {
+		var task models.Task
+		cursor.Decode(&task)
+		tasks = append(tasks, task)
 	}
 
-	c.JSON(200, tasks)
+	c.JSON(http.StatusOK, tasks)
 }
 
-// UpdateTask updates an existing task
-// UpdateTask updates an existing task
-func UpdateTask(c *gin.Context) {
-	taskID := c.Param("id") // Get the task ID from URL parameter
-	var task models.Task    // Define the task model to hold the updated data
+// UpdateTaskStatus handles PUT /tasks/:id/status
+func UpdateTaskStatus(c *gin.Context) {
+	taskID := c.Param("id")
 
-	// Bind the incoming JSON data to the task struct
-	if err := c.BindJSON(&task); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+	objID, err := primitive.ObjectIDFromHex(taskID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
 		return
 	}
 
-	client, ctx, cancel := db.ConnectDB() // Get database connection
-	defer cancel()                        // Ensure the cancel function is called after DB operations
+	var body struct {
+		Status    string `json:"status"`
+		UpdatedBy string `json:"updatedBy"`
+	}
+
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	client, ctx, cancel, err := db.ConnectDB()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection failed"})
+		return
+	}
+	defer cancel()
+	defer client.Disconnect(ctx)
 
 	collection := client.Database("taskboard").Collection("tasks")
 
-	// Convert taskID string to MongoDB ObjectID type
-	objectID, err := primitive.ObjectIDFromHex(taskID)
-	if err != nil {
-		c.JSON(400, gin.H{"error": "Invalid task ID format"})
-		return
-	}
-
-	filter := bson.M{"_id": objectID} // MongoDB filter to find task by ID
 	update := bson.M{
 		"$set": bson.M{
-			"title":       task.Title,
-			"description": task.Description,
-			"assigned_to": task.AssignedTo,
-			"status":      task.Status,
-			"due_date":    task.DueDate,
-			"created_at":  task.CreatedAt,
+			"status":    body.Status,
+			"updatedAt": time.Now(),
 		},
 	}
 
-	// Perform the update operation
-	updateResult, err := collection.UpdateOne(ctx, filter, update)
+	_, err = collection.UpdateOne(ctx, bson.M{"_id": objID}, update)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update task"})
 		return
 	}
 
-	// If no documents were updated, inform the user
-	if updateResult.MatchedCount == 0 {
-		c.JSON(404, gin.H{"message": "Task not found"})
-		return
+	// Retrieve task title for notification (optional optimization: fetch before update)
+	// For simplicity, just sending ID and Status or fetch again.
+	// Let's fetch the task to get the title.
+	var updatedTask models.Task
+	collection.FindOne(ctx, bson.M{"_id": objID}).Decode(&updatedTask)
+
+	// Convert ObjectIDs to strings
+	var assignedTo []string
+	for _, id := range updatedTask.AssignedTo {
+		assignedTo = append(assignedTo, id.Hex())
 	}
 
-	c.JSON(200, gin.H{"message": "Task updated successfully"})
+	rabbitmq.PublishTaskStatusUpdated(taskID, updatedTask.Title, body.Status, assignedTo, body.UpdatedBy, time.Now())
+
+	c.JSON(http.StatusOK, gin.H{"message": "Task status updated"})
 }
 
-// DeleteTask deletes a task by ID
-// DeleteTask deletes a task by ID
+// DeleteTask handles DELETE /tasks/:id
 func DeleteTask(c *gin.Context) {
-	taskID := c.Param("id") // Get the task ID from URL parameter
+	taskID := c.Param("id")
 
-	client, ctx, cancel := db.ConnectDB() // Get database connection
-	defer cancel()                        // Ensure the cancel function is called after DB operations
+	objID, err := primitive.ObjectIDFromHex(taskID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
+		return
+	}
+
+	client, ctx, cancel, err := db.ConnectDB()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection failed"})
+		return
+	}
+	defer cancel()
+	defer client.Disconnect(ctx)
 
 	collection := client.Database("taskboard").Collection("tasks")
 
-	// Convert taskID string to MongoDB ObjectID type
-	objectID, err := primitive.ObjectIDFromHex(taskID)
+	_, err = collection.DeleteOne(ctx, bson.M{"_id": objID})
 	if err != nil {
-		c.JSON(400, gin.H{"error": "Invalid task ID format"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete task"})
 		return
 	}
 
-	// Perform the delete operation
-	_, err = collection.DeleteOne(ctx, bson.M{"_id": objectID})
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(200, gin.H{"message": "Task deleted successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": "Task deleted"})
 }

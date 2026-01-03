@@ -1,18 +1,29 @@
 package main
 
 import (
+	"common/middleware"
+	"user-service/events"
 	"user-service/routes"
 
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
+	// Start RabbitMQ Consumer
+	go events.SetupConsumer("amqp://guest:guest@localhost:5672/")
+
 	r := gin.Default()
+	r.Use(middleware.CORSMiddleware())
 
 	// Register routes
-	r.POST("/register", routes.RegisterUser) // User Registration
-	r.POST("/login", routes.LoginUser)       // User Login
+	// Register routes
+	r.GET("/users", routes.GetAllUsers)             // Get all users
+	r.PUT("/users/:id", routes.UpdateUserProfile)   // Update user profile
+	r.GET("/users/:id", routes.GetUserByID)         // Get user by ID
+	r.PUT("/users/:id/role", routes.UpdateUserRole) // Update user role -> admin only
 
 	// Run the server
-	r.Run(":8087") // Run on port 8087
+	if err := r.Run(":8087"); err != nil {
+		panic(err)
+	}
 }

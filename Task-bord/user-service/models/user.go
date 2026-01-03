@@ -7,5 +7,6 @@ type User struct {
 	Username string             `json:"username" bson:"username"`
 	Email    string             `json:"email" bson:"email"`
 	Password string             `json:"password" bson:"password"`
-	Role     string             `json:"role" bson:"role"` // "admin" or "regular"
+	Role     string             `json:"role" bson:"role"`   // "admin" or "regular"
+	Theme    string             `json:"theme" bson:"theme"` // "light" or "dark"
 }

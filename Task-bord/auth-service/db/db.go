@@ -10,37 +10,51 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// ConnectDB - Connect to MongoDB and return the client, context, and cancel function
-func ConnectDB() (*mongo.Client, context.Context, context.CancelFunc) {
+var Client *mongo.Client
+
+// InitDB - Connect to MongoDB and initialize the global client
+func InitDB() error {
 	// Define the MongoDB URI (connection string)
 	uri := "mongodb+srv://nebyatahmed21_db_user:he2p2eR73gopy82k@cluster0.dwjahlm.mongodb.net/?appName=Cluster0"
 
 	// Set a timeout for the connection
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	// Connect to MongoDB
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
 	if err != nil {
-		log.Fatal("Error connecting to MongoDB:", err)
+		return fmt.Errorf("error connecting to MongoDB: %v", err)
 	}
 
 	// Ping MongoDB to verify connection
 	err = client.Ping(ctx, nil)
 	if err != nil {
-		log.Fatal("MongoDB connection failed:", err)
+		return fmt.Errorf("MongoDB connection failed: %v", err)
 	}
 
+	Client = client
 	fmt.Println("Connected to MongoDB!")
+	return nil
+}
 
-	// Return the client, context, and cancel function
-	return client, ctx, cancel
+// GetCollection returns a handle to a MongoDB collection
+func GetCollection(collectionName string) *mongo.Collection {
+	if Client == nil {
+		log.Fatal("Database not initialized")
+	}
+	return Client.Database("taskboard").Collection(collectionName)
 }
 
 // DisconnectDB - Close the connection to MongoDB
-func DisconnectDB(client *mongo.Client, ctx context.Context, cancel context.CancelFunc) {
-	err := client.Disconnect(ctx)
-	if err != nil {
+func DisconnectDB() {
+	if Client == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := Client.Disconnect(ctx); err != nil {
 		log.Fatal("Error disconnecting from MongoDB:", err)
 	}
-	cancel()
+	fmt.Println("Disconnected from MongoDB")
 }

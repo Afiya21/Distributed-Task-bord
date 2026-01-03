@@ -1,110 +1,158 @@
 package routes
 
 import (
-	"time"
 	"user-service/db"
 	"user-service/models"
 
-	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"golang.org/x/crypto/bcrypt"
 )
 
-// GenerateJWT creates a JWT token
-func GenerateJWT(userID string) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id": userID,
-		"exp":     time.Now().Add(time.Hour * 24).Unix(),
-	})
-
-	secretKey := []byte("your-secret-key")
-	tokenString, err := token.SignedString(secretKey)
-	if err != nil {
-		return "", err
-	}
-
-	return tokenString, nil
-}
-
 // RegisterUser handles user registration
-func RegisterUser(c *gin.Context) {
-	var user models.User
-	if err := c.BindJSON(&user); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
-	}
 
-	// Hash the password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+// GetAllUsers fetches all users (for Admin selection)
+func GetAllUsers(c *gin.Context) {
+	client, ctx, cancel, err := db.ConnectDB()
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Error hashing password"})
+		c.JSON(500, gin.H{"error": "Database connection failed: " + err.Error()})
 		return
 	}
-	user.Password = string(hashedPassword)
+	defer db.DisconnectDB(client, ctx, cancel)
 
-	client, ctx, cancel := db.ConnectDB()
-	defer cancel()
+	collection := client.Database("user-management-service").Collection("users")
 
-	collection := client.Database("taskboard").Collection("users")
-
-	// Check if user already exists
-	var existingUser models.User
-	err = collection.FindOne(ctx, bson.M{"email": user.Email}).Decode(&existingUser)
-	if err != mongo.ErrNoDocuments {
-		c.JSON(400, gin.H{"error": "User already exists"})
-		return
-	}
-
-	// Insert the user into the database
-	user.ID = primitive.NewObjectID()
-	_, err = collection.InsertOne(ctx, user)
+	cursor, err := collection.Find(ctx, bson.M{})
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Failed to insert user"})
+		c.JSON(500, gin.H{"error": "Failed to fetch users"})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	users := []models.User{}
+	if err = cursor.All(ctx, &users); err != nil {
+		c.JSON(500, gin.H{"error": "Failed to parse users"})
 		return
 	}
 
-	c.JSON(200, gin.H{"message": "User registered successfully"})
+	// Filter sensitive data if needed, or just return relevant fields.
+	// For simplicity, returning full user struct (password is hashed anyway).
+	c.JSON(200, users)
 }
 
-// LoginUser handles user login
-func LoginUser(c *gin.Context) {
-	var loginData struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
+// UpdateUserProfile updates user profile (Name/Username)
+func UpdateUserProfile(c *gin.Context) {
+	userId := c.Param("id")
+	var body struct {
+		Username string `json:"username"`
+		Theme    string `json:"theme"`
 	}
-
-	if err := c.BindJSON(&loginData); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(400, gin.H{"error": "Invalid input"})
 		return
 	}
 
-	client, ctx, cancel := db.ConnectDB()
-	defer cancel()
+	client, ctx, cancel, err := db.ConnectDB()
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Database connection failed: " + err.Error()})
+		return
+	}
+	defer db.DisconnectDB(client, ctx, cancel)
+	collection := client.Database("user-management-service").Collection("users")
 
-	collection := client.Database("taskboard").Collection("users")
+	objID, err := primitive.ObjectIDFromHex(userId)
+	if err != nil {
+		c.JSON(400, gin.H{"error": "Invalid User ID"})
+		return
+	}
+
+	updateFields := bson.M{}
+	if body.Username != "" {
+		updateFields["username"] = body.Username
+	}
+	if body.Theme != "" {
+		updateFields["theme"] = body.Theme
+	}
+
+	update := bson.M{"$set": updateFields}
+	_, err = collection.UpdateOne(ctx, bson.M{"_id": objID}, update)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to update profile"})
+		return
+	}
+
+	c.JSON(200, gin.H{"message": "Profile updated"})
+}
+
+// GetUserByID fetches a single user by ID
+func GetUserByID(c *gin.Context) {
+	userId := c.Param("id")
+	objID, err := primitive.ObjectIDFromHex(userId)
+	if err != nil {
+		c.JSON(400, gin.H{"error": "Invalid User ID"})
+		return
+	}
+
+	client, ctx, cancel, err := db.ConnectDB()
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Database connection failed: " + err.Error()})
+		return
+	}
+	defer db.DisconnectDB(client, ctx, cancel)
+
+	collection := client.Database("user-management-service").Collection("users")
 
 	var user models.User
-	err := collection.FindOne(ctx, bson.M{"email": loginData.Email}).Decode(&user)
+	err = collection.FindOne(ctx, bson.M{"_id": objID}).Decode(&user)
 	if err == mongo.ErrNoDocuments {
-		c.JSON(400, gin.H{"error": "User not found"})
+		c.JSON(404, gin.H{"error": "User not found"})
+		return
+	} else if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to fetch user"})
 		return
 	}
 
-	// Check if password is correct
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(loginData.Password)); err != nil {
-		c.JSON(400, gin.H{"error": "Invalid password"})
+	c.JSON(200, user)
+}
+
+// UpdateUserRole updates a user's role (Admin only)
+func UpdateUserRole(c *gin.Context) {
+	userId := c.Param("id")
+	var body struct {
+		Role string `json:"role"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(400, gin.H{"error": "Invalid input"})
 		return
 	}
 
-	// Generate JWT token
-	token, err := GenerateJWT(user.ID.Hex())
+	if body.Role != "user" && body.Role != "admin" {
+		c.JSON(400, gin.H{"error": "Invalid role. Must be 'user' or 'admin'"})
+		return
+	}
+
+	client, ctx, cancel, err := db.ConnectDB()
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Error generating token"})
+		c.JSON(500, gin.H{"error": "Database connection failed: " + err.Error()})
+		return
+	}
+	defer db.DisconnectDB(client, ctx, cancel)
+
+	collection := client.Database("user-management-service").Collection("users")
+
+	objID, err := primitive.ObjectIDFromHex(userId)
+	if err != nil {
+		c.JSON(400, gin.H{"error": "Invalid User ID"})
 		return
 	}
 
-	c.JSON(200, gin.H{"message": "Login successful", "token": token})
+	update := bson.M{"$set": bson.M{"role": body.Role}}
+	_, err = collection.UpdateOne(ctx, bson.M{"_id": objID}, update)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to update role"})
+		return
+	}
+
+	c.JSON(200, gin.H{"message": "User role updated successfully"})
 }

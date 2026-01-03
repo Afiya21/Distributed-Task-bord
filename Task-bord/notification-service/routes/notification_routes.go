@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // Create a notification
@@ -59,7 +60,7 @@ func GetNotifications(c *gin.Context) {
 	c.JSON(http.StatusOK, notifications)
 }
 
-// Mark notification as read
+// MarkAsRead marks a notification as read
 func MarkAsRead(c *gin.Context) {
 	notificationID := c.Param("id")
 	client, ctx, cancel := db.ConnectDB()
@@ -67,10 +68,16 @@ func MarkAsRead(c *gin.Context) {
 
 	collection := client.Database("taskboard").Collection("notifications")
 
+	objID, err := primitive.ObjectIDFromHex(notificationID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+
 	// Update the notification's "is_read" field to true
-	_, err := collection.UpdateOne(
+	_, err = collection.UpdateOne(
 		ctx,
-		bson.M{"_id": notificationID},
+		bson.M{"_id": objID},
 		bson.M{"$set": bson.M{"is_read": true}},
 	)
 	if err != nil {

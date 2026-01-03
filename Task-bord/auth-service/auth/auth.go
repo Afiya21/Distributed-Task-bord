@@ -3,9 +3,12 @@ package auth
 import (
 	"auth-service/db"
 	"auth-service/models"
+	"context"
 	"fmt"
 	"net/http"
 	"time"
+
+	"common/rabbitmq"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
@@ -13,6 +16,17 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/crypto/bcrypt"
 )
+
+var (
+	RabbitClient *rabbitmq.RabbitClient
+)
+
+// InitRabbitMQ initializes the RabbitMQ connection
+func InitRabbitMQ(url string) error {
+	var err error
+	RabbitClient, err = rabbitmq.Connect(url)
+	return err
+}
 
 // Hash password before saving
 func hashPassword(password string) (string, error) {
@@ -41,10 +55,10 @@ func generateJWT(userID string, role string) (string, error) {
 
 // Register a new user
 func RegisterUser(email, password, role string) (string, error) {
-	client, ctx, cancel := db.ConnectDB()
+	collection := db.GetCollection("users")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	collection := client.Database("taskboard").Collection("users")
 	hashedPassword, err := hashPassword(password)
 	if err != nil {
 		return "", err
@@ -69,15 +83,29 @@ func RegisterUser(email, password, role string) (string, error) {
 		return "", err
 	}
 
+	// Publish UserRegistered event
+	if RabbitClient != nil {
+		eventPayload := map[string]string{
+			"userId": userID,
+			"email":  email,
+			"role":   role,
+		}
+		err = RabbitClient.Publish("", "user_queue", "UserRegistered", eventPayload)
+		if err != nil {
+			fmt.Printf("Failed to publish UserRegistered event: %v\n", err)
+			// Don't fail registration if publishing fails, just log it
+		}
+	}
+
 	return token, nil
 }
 
 // Login a user
 func LoginUser(email, password string) (string, error) {
-	client, ctx, cancel := db.ConnectDB()
+	collection := db.GetCollection("users")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	collection := client.Database("taskboard").Collection("users")
 	var user models.User
 
 	// Find the user by email
@@ -98,6 +126,27 @@ func LoginUser(email, password string) (string, error) {
 	}
 
 	return token, nil
+}
+
+// UpdateUserRole updates a user's role (Admin only)
+func UpdateUserRole(userID, newRole string) error {
+	collection := db.GetCollection("users")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	objID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return fmt.Errorf("invalid user ID")
+	}
+
+	update := bson.M{
+		"$set": bson.M{
+			"role": newRole,
+		},
+	}
+
+	_, err = collection.UpdateOne(ctx, bson.M{"_id": objID}, update)
+	return err
 }
 
 // Logout - Invalidate the session
