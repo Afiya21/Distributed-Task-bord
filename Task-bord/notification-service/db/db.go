@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
@@ -14,7 +15,10 @@ var Client *mongo.Client
 // InitDB initializes the MongoDB connection
 func InitDB() error {
 	// Define the MongoDB URI (connection string)
-	uri := "mongodb+srv://nebyatahmed21_db_user:zEzew7TtvTHmJAcY@user-management-service.neiqyrn.mongodb.net/?appName=user-management-service"
+	uri := os.Getenv("MONGO_URI")
+	if uri == "" {
+		return fmt.Errorf("MONGO_URI not set in environment")
+	}
 
 	var err error
 	Client, err = mongo.Connect(context.Background(), options.Client().ApplyURI(uri))

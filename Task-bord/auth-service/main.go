@@ -6,16 +6,27 @@ import (
 	"auth-service/routes"
 	"common/middleware"
 	"log"
+	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// Load environment variables
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found")
+	}
+
 	r := gin.Default()
 	r.Use(middleware.CORSMiddleware())
 
 	// Initialize RabbitMQ
-	if err := auth.InitRabbitMQ("amqp://guest:guest@localhost:5672/"); err != nil {
+	rabbitURL := os.Getenv("RABBITMQ_URL")
+	if rabbitURL == "" {
+		rabbitURL = "amqp://guest:guest@localhost:5672/"
+	}
+	if err := auth.InitRabbitMQ(rabbitURL); err != nil {
 		log.Printf("Failed to connect to RabbitMQ: %v", err)
 	} else {
 		defer auth.RabbitClient.Close()
@@ -30,7 +41,11 @@ func main() {
 	routes.RegisterRoutes(r) // Register all routes in auth_routes.go
 
 	// Start the server
-	if err := r.Run(":8080"); err != nil {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	if err := r.Run(":" + port); err != nil {
 		log.Fatal("Error starting the server: ", err)
 	}
 }

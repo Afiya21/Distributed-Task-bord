@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
@@ -15,7 +16,10 @@ var Client *mongo.Client
 // InitDB - Connect to MongoDB and initialize the global client
 func InitDB() error {
 	// Define the MongoDB URI (connection string)
-	uri := "mongodb+srv://nebyatahmed21_db_user:he2p2eR73gopy82k@cluster0.dwjahlm.mongodb.net/?appName=Cluster0"
+	uri := os.Getenv("MONGO_URI")
+	if uri == "" {
+		return fmt.Errorf("MONGO_URI not set in environment")
+	}
 
 	// Set a timeout for the connection
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

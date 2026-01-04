@@ -7,10 +7,19 @@ import (
 	"notification-service/routes"
 	"notification-service/websockets"
 
+	"log"
+	"os"
+
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// Load environment variables
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found")
+	}
+
 	// Initialize WebSocket Hub
 	hub := websockets.NewHub()
 	go hub.Run()
@@ -21,7 +30,11 @@ func main() {
 	}
 
 	// Start RabbitMQ Consumer
-	go events.SetupConsumer("amqp://guest:guest@localhost:5672/", hub)
+	rabbitURL := os.Getenv("RABBITMQ_URL")
+	if rabbitURL == "" {
+		rabbitURL = "amqp://guest:guest@localhost:5672/"
+	}
+	go events.SetupConsumer(rabbitURL, hub)
 
 	r := gin.Default()
 	r.Use(middleware.CORSMiddleware())
@@ -42,7 +55,11 @@ func main() {
 	})
 
 	// Start the server
-	if err := r.Run(":8083"); err != nil {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8083"
+	}
+	if err := r.Run(":" + port); err != nil {
 		panic(err)
 	}
 }

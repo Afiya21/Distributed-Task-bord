@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"common/rabbitmq"
@@ -50,7 +51,11 @@ func generateJWT(userID, role, email, username string) (string, error) {
 		"exp":      time.Now().Add(time.Hour * 24).Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	secretKey := []byte("your-secret-key") // Store securely in environment variables
+	secretStr := os.Getenv("JWT_SECRET")
+	if secretStr == "" {
+		secretStr = "your-secret-key" // Fallback or could error out
+	}
+	secretKey := []byte(secretStr)
 	tokenString, err := token.SignedString(secretKey)
 	return tokenString, err
 }

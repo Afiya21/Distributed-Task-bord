@@ -6,12 +6,25 @@ import (
 	"Task-service/routes"
 	"common/middleware"
 
+	"log"
+	"os"
+
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// Load environment variables
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found")
+	}
+
 	// Initialize RabbitMQ
-	rabbitmq.InitRabbitMQ("amqp://guest:guest@localhost:5672/")
+	rabbitURL := os.Getenv("RABBITMQ_URL")
+	if rabbitURL == "" {
+		rabbitURL = "amqp://guest:guest@localhost:5672/"
+	}
+	rabbitmq.InitRabbitMQ(rabbitURL)
 
 	// Initialize MongoDB
 	if err := db.InitDB(); err != nil {
@@ -28,7 +41,11 @@ func main() {
 	r.DELETE("/tasks/:id", routes.DeleteTask)
 
 	// Run the service on port 8081
-	if err := r.Run(":8081"); err != nil {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8081"
+	}
+	if err := r.Run(":" + port); err != nil {
 		panic(err)
 	}
 }
