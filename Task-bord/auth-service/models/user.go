@@ -9,4 +9,5 @@ type User struct {
 	Password string             `bson:"password"`
 	Role     string             `bson:"role"`
 	Username string             `bson:"username"` // Add username field
+	Theme    string             `bson:"theme"`    // "light" or "dark"
 }

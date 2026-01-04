@@ -97,7 +97,7 @@ const Notifications = ({ userId }) => {
                     top: '40px',
                     right: '0',
                     width: '320px',
-                    background: '#1e1e1e',
+                    background: 'var(--dropdown-bg)',
                     border: '1px solid var(--border-color)',
                     borderRadius: '8px',
                     boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.1)',
@@ -112,7 +112,8 @@ const Notifications = ({ userId }) => {
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        background: '#2d3748'
+                        background: 'var(--nav-bg)',
+                        color: 'var(--text-primary)'
                     }}>
                         <span>Notifications</span>
                         <button onClick={fetchNotifications} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '1rem' }}>🔄</button>
@@ -123,8 +124,8 @@ const Notifications = ({ userId }) => {
                         notifications.map(n => n && (
                             <div key={n.id} style={{
                                 padding: '1rem',
-                                borderBottom: '1px solid rgba(255,255,255,0.05)',
-                                background: n.is_read ? 'transparent' : 'rgba(255,255,255,0.05)',
+                                borderBottom: '1px solid var(--border-color)',
+                                background: n.is_read ? 'transparent' : 'var(--dropdown-hover)',
                                 opacity: n.is_read ? 0.6 : 1,
                                 transition: 'background 0.2s'
                             }}>

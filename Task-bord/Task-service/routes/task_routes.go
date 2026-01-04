@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -30,20 +31,13 @@ func CreateTask(c *gin.Context) {
 	task.UpdatedAt = time.Now()
 	task.Status = "OPEN"
 
-	// 3. Connect to DB
-	// 3. Connect to DB
-	client, ctx, cancel, err := db.ConnectDB()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection failed", "details": err.Error()})
-		return
-	}
+	// 3. Connect to DB (using singleton)
+	collection := db.GetCollection("tasks")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	defer client.Disconnect(ctx)
-
-	collection := client.Database("taskboard").Collection("tasks")
 
 	// 4. Insert task into MongoDB
-	_, err = collection.InsertOne(ctx, task)
+	_, err := collection.InsertOne(ctx, task)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create task"})
 		return
@@ -68,15 +62,9 @@ func CreateTask(c *gin.Context) {
 
 // GetTasks handles GET /tasks
 func GetTasks(c *gin.Context) {
-	client, ctx, cancel, err := db.ConnectDB()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection failed"})
-		return
-	}
+	collection := db.GetCollection("tasks")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	defer client.Disconnect(ctx)
-
-	collection := client.Database("taskboard").Collection("tasks")
 
 	// Build filter from query params
 	filter := bson.M{}
@@ -151,15 +139,9 @@ func UpdateTaskStatus(c *gin.Context) {
 		return
 	}
 
-	client, ctx, cancel, err := db.ConnectDB()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection failed"})
-		return
-	}
+	collection := db.GetCollection("tasks")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	defer client.Disconnect(ctx)
-
-	collection := client.Database("taskboard").Collection("tasks")
 
 	update := bson.M{
 		"$set": bson.M{
@@ -201,15 +183,9 @@ func DeleteTask(c *gin.Context) {
 		return
 	}
 
-	client, ctx, cancel, err := db.ConnectDB()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection failed"})
-		return
-	}
+	collection := db.GetCollection("tasks")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	defer client.Disconnect(ctx)
-
-	collection := client.Database("taskboard").Collection("tasks")
 
 	_, err = collection.DeleteOne(ctx, bson.M{"_id": objID})
 	if err != nil {

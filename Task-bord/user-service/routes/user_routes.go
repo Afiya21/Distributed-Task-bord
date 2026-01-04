@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"context"
+	"time"
 	"user-service/db"
 	"user-service/models"
 
@@ -14,14 +16,9 @@ import (
 
 // GetAllUsers fetches all users (for Admin selection)
 func GetAllUsers(c *gin.Context) {
-	client, ctx, cancel, err := db.ConnectDB()
-	if err != nil {
-		c.JSON(500, gin.H{"error": "Database connection failed: " + err.Error()})
-		return
-	}
-	defer db.DisconnectDB(client, ctx, cancel)
-
-	collection := client.Database("user-management-service").Collection("users")
+	collection := db.GetCollection("users")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	cursor, err := collection.Find(ctx, bson.M{})
 	if err != nil {
@@ -53,13 +50,9 @@ func UpdateUserProfile(c *gin.Context) {
 		return
 	}
 
-	client, ctx, cancel, err := db.ConnectDB()
-	if err != nil {
-		c.JSON(500, gin.H{"error": "Database connection failed: " + err.Error()})
-		return
-	}
-	defer db.DisconnectDB(client, ctx, cancel)
-	collection := client.Database("user-management-service").Collection("users")
+	collection := db.GetCollection("users")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	objID, err := primitive.ObjectIDFromHex(userId)
 	if err != nil {
@@ -94,14 +87,9 @@ func GetUserByID(c *gin.Context) {
 		return
 	}
 
-	client, ctx, cancel, err := db.ConnectDB()
-	if err != nil {
-		c.JSON(500, gin.H{"error": "Database connection failed: " + err.Error()})
-		return
-	}
-	defer db.DisconnectDB(client, ctx, cancel)
-
-	collection := client.Database("user-management-service").Collection("users")
+	collection := db.GetCollection("users")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	var user models.User
 	err = collection.FindOne(ctx, bson.M{"_id": objID}).Decode(&user)
@@ -132,14 +120,9 @@ func UpdateUserRole(c *gin.Context) {
 		return
 	}
 
-	client, ctx, cancel, err := db.ConnectDB()
-	if err != nil {
-		c.JSON(500, gin.H{"error": "Database connection failed: " + err.Error()})
-		return
-	}
-	defer db.DisconnectDB(client, ctx, cancel)
-
-	collection := client.Database("user-management-service").Collection("users")
+	collection := db.GetCollection("users")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	objID, err := primitive.ObjectIDFromHex(userId)
 	if err != nil {

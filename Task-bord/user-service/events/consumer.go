@@ -2,7 +2,9 @@ package events
 
 import (
 	"common/rabbitmq"
+	"context"
 	"log"
+	"time"
 	"user-service/db"
 	"user-service/models"
 
@@ -51,19 +53,9 @@ func handleUserRegistered(payload interface{}) {
 	log.Printf("Syncing user: %s (%s)", email, role)
 
 	// Save to DB
-	client, ctx, cancel, err := db.ConnectDB()
-	if err != nil {
-		log.Printf("Failed to connect to DB: %v", err)
-		return
-	}
+	collection := db.GetCollection("users")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	defer func() {
-		if err := client.Disconnect(ctx); err != nil {
-			log.Printf("Error disconnecting: %v", err)
-		}
-	}()
-
-	collection := client.Database("user-management-service").Collection("users")
 
 	// Check if user exists (idempotency)
 	existingCount, err := collection.CountDocuments(ctx, bson.M{"_id": objID})

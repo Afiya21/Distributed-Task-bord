@@ -1,6 +1,7 @@
 package main
 
 import (
+	"Task-service/db"
 	"Task-service/rabbitmq"
 	"Task-service/routes"
 	"common/middleware"
@@ -11,6 +12,11 @@ import (
 func main() {
 	// Initialize RabbitMQ
 	rabbitmq.InitRabbitMQ("amqp://guest:guest@localhost:5672/")
+
+	// Initialize MongoDB
+	if err := db.InitDB(); err != nil {
+		panic(err)
+	}
 
 	r := gin.Default()
 	r.Use(middleware.CORSMiddleware())

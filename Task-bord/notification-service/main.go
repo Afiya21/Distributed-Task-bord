@@ -2,6 +2,7 @@ package main
 
 import (
 	"common/middleware"
+	"notification-service/db"
 	"notification-service/events"
 	"notification-service/routes"
 	"notification-service/websockets"
@@ -13,6 +14,11 @@ func main() {
 	// Initialize WebSocket Hub
 	hub := websockets.NewHub()
 	go hub.Run()
+
+	// Initialize MongoDB
+	if err := db.InitDB(); err != nil {
+		panic(err)
+	}
 
 	// Start RabbitMQ Consumer
 	go events.SetupConsumer("amqp://guest:guest@localhost:5672/", hub)

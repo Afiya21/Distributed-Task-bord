@@ -12,12 +12,13 @@ const AdminDashboard = () => {
     const [currentSelection, setCurrentSelection] = useState('');
     const [activeTab, setActiveTab] = useState('tasks');
     const [showSuccess, setShowSuccess] = useState(false);
+    const [error, setError] = useState(null); // Add error state if we want inline errors later
     const [currentUserId, setCurrentUserId] = useState(null); // To store logged in admin ID for notifications
 
     const [username, setUsername] = useState('');
     const [userEmail, setUserEmail] = useState('');
     const [userRole, setUserRole] = useState('');
-    const [theme, setTheme] = useState('light');
+    const [theme, setTheme] = useState('dark');
 
     // ... existing filters state ...
     const [filterStatus, setFilterStatus] = useState('');
@@ -79,13 +80,9 @@ const AdminDashboard = () => {
 
     const applyTheme = (t) => {
         if (t === 'dark') {
-            document.body.style.backgroundColor = '#0f172a';
-            document.body.style.color = '#f8fafc';
-            document.body.classList.add('dark-mode');
+            document.body.classList.remove('light-mode');
         } else {
-            document.body.style.backgroundColor = '#f4f7fa';
-            document.body.style.color = '#1e293b';
-            document.body.classList.remove('dark-mode');
+            document.body.classList.add('light-mode');
         }
     };
 
@@ -127,7 +124,7 @@ const AdminDashboard = () => {
             setShowSuccess(true); // Show success modal
             setTimeout(() => setShowSuccess(false), 2000); // Auto close
         } catch (err) {
-            alert('Failed to create task');
+            console.error('Failed to create task');
         }
     };
 
@@ -135,11 +132,10 @@ const AdminDashboard = () => {
         if (window.confirm('Are you sure you want to promote this user to Admin?')) {
             try {
                 await api.updateUserRole(userId, 'admin');
-                alert('User promoted successfully');
+                // alert('User promoted successfully'); // Removed alert
                 fetchUsers();
             } catch (err) {
-                console.error(err);
-                alert('Failed to promote user');
+                console.error('Failed to promote user', err); // Replaced alert with console.error
             }
         }
     };
@@ -156,18 +152,18 @@ const AdminDashboard = () => {
                 <div className="flex">
                     <button
                         onClick={() => setActiveTab('tasks')}
-                        style={{ background: activeTab === 'tasks' ? 'var(--accent-color)' : 'transparent' }}
+                        className={`btn-ghost ${activeTab === 'tasks' ? 'active' : ''}`}
                     >Tasks</button>
                     <button
                         onClick={() => setActiveTab('users')}
-                        style={{ background: activeTab === 'users' ? 'var(--accent-color)' : 'transparent' }}
+                        className={`btn-ghost ${activeTab === 'users' ? 'active' : ''}`}
                     >Users</button>
                     <button
                         onClick={() => setActiveTab('settings')}
-                        style={{ background: activeTab === 'settings' ? 'var(--accent-color)' : 'transparent' }}
+                        className={`btn-ghost ${activeTab === 'settings' ? 'active' : ''}`}
                     >Settings</button>
                     <Notifications userId={currentUserId} />
-                    <button onClick={() => { localStorage.clear(); window.location.href = '/login'; }} style={{ background: 'transparent', border: '1px solid var(--border-color)' }}>Logout</button>
+                    <button onClick={() => { localStorage.clear(); window.location.href = '/login'; }} className="btn-ghost" style={{ border: '1px solid var(--border-color)' }}>Logout</button>
                 </div>
             </nav>
 
@@ -381,9 +377,11 @@ const AdminDashboard = () => {
                             <button className="btn btn-primary" onClick={async () => {
                                 try {
                                     await api.updateUserProfile(currentUserId, { username, theme });
+                                    // alert('Profile updated successfully!'); // User requested no popup
                                     setActiveTab('tasks');
                                 } catch (e) {
-                                    // Silent fail
+                                    console.error("Failed to update profile", e);
+                                    // alert('Failed to update profile. Please try again.');
                                 }
                             }}>
                                 Save Changes

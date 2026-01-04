@@ -2,6 +2,7 @@ package main
 
 import (
 	"common/middleware"
+	"user-service/db"
 	"user-service/events"
 	"user-service/routes"
 
@@ -11,6 +12,11 @@ import (
 func main() {
 	// Start RabbitMQ Consumer
 	go events.SetupConsumer("amqp://guest:guest@localhost:5672/")
+
+	// Initialize MongoDB
+	if err := db.InitDB(); err != nil {
+		panic(err)
+	}
 
 	r := gin.Default()
 	r.Use(middleware.CORSMiddleware())

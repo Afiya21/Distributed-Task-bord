@@ -2,6 +2,7 @@ package events
 
 import (
 	"common/rabbitmq"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -32,9 +33,9 @@ func SetupConsumer(url string, hub *websockets.Hub) {
 }
 
 func processEvent(event rabbitmq.Event, hub *websockets.Hub) {
-	client, ctx, cancel := db.ConnectDB()
+	collection := db.GetCollection("notifications")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	collection := client.Database("taskboard").Collection("notifications")
 
 	// Convert payload to map
 	payload, ok := event.Payload.(map[string]interface{})

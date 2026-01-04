@@ -13,7 +13,7 @@ const UserDashboard = () => {
     const [username, setUsername] = useState('');
     const [userEmail, setUserEmail] = useState('');
     const [userRole, setUserRole] = useState('');
-    const [theme, setTheme] = useState('light');
+    const [theme, setTheme] = useState('dark'); // Default to dark
     const [refreshKey, setRefreshKey] = useState(0); // Added for useEffect dependency
     const navigate = useNavigate();
 
@@ -80,14 +80,10 @@ const UserDashboard = () => {
     };
 
     const applyTheme = (t) => {
-        if (t === 'dark') {
-            document.body.style.backgroundColor = '#0f172a'; // Match CSS var
-            document.body.style.color = '#f8fafc';
-            document.body.classList.add('dark-mode');
+        if (t === 'light') {
+            document.body.classList.add('light-mode');
         } else {
-            document.body.style.backgroundColor = '#f4f7fa'; // Light gray
-            document.body.style.color = '#1e293b'; // Slate 800
-            document.body.classList.remove('dark-mode');
+            document.body.classList.remove('light-mode');
         }
     };
 
@@ -97,7 +93,7 @@ const UserDashboard = () => {
             await api.updateTaskStatus(taskId, newStatus, userId);
             fetchTasks(userId); // Refresh to see update
         } catch (err) {
-            alert('Failed to update status');
+            console.error('Failed to update status');
         } finally {
             setLoading(false);
         }
@@ -120,14 +116,14 @@ const UserDashboard = () => {
                 <div className="flex">
                     <button
                         onClick={() => setTab('tasks')}
-                        style={{ background: tab === 'tasks' ? 'var(--accent-color)' : 'transparent' }}
+                        className={`btn-ghost ${tab === 'tasks' ? 'active' : ''}`}
                     >Tasks</button>
                     <button
                         onClick={() => setTab('settings')}
-                        style={{ background: tab === 'settings' ? 'var(--accent-color)' : 'transparent' }}
+                        className={`btn-ghost ${tab === 'settings' ? 'active' : ''}`}
                     >Settings</button>
                     <Notifications userId={userId} />
-                    <button onClick={() => { localStorage.clear(); window.location.href = '/login'; }} style={{ background: 'transparent', border: '1px solid var(--border-color)' }}>Logout</button>
+                    <button onClick={() => { localStorage.clear(); window.location.href = '/login'; }} className="btn-ghost" style={{ border: '1px solid var(--border-color)' }}>Logout</button>
                 </div>
             </nav>
 

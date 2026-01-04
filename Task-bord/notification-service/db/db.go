@@ -3,43 +3,39 @@ package db
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-func ConnectDB() (*mongo.Client, context.Context, context.CancelFunc) {
+var Client *mongo.Client
+
+// InitDB initializes the MongoDB connection
+func InitDB() error {
 	// Define the MongoDB URI (connection string)
 	uri := "mongodb+srv://nebyatahmed21_db_user:zEzew7TtvTHmJAcY@user-management-service.neiqyrn.mongodb.net/?appName=user-management-service"
 
-	// Set a timeout for the connection
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-
-	// Connect to MongoDB
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	var err error
+	Client, err = mongo.Connect(context.Background(), options.Client().ApplyURI(uri))
 	if err != nil {
-		log.Fatal("Error connecting to MongoDB:", err)
+		return err
 	}
 
-	// Ping MongoDB to verify connection
-	err = client.Ping(ctx, nil)
+	// Ping the database
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	err = Client.Ping(ctx, nil)
 	if err != nil {
-		log.Fatal("MongoDB connection failed:", err)
+		return err
 	}
 
 	fmt.Println("Connected to MongoDB!")
-
-	// Return the client, context, and cancel function
-	return client, ctx, cancel
+	return nil
 }
 
-// DisconnectDB - Close the connection to MongoDB
-func DisconnectDB(client *mongo.Client, ctx context.Context, cancel context.CancelFunc) {
-	err := client.Disconnect(ctx)
-	if err != nil {
-		log.Fatal("Error disconnecting from MongoDB:", err)
-	}
-	cancel()
+// GetCollection returns a MongoDB collection
+func GetCollection(collectionName string) *mongo.Collection {
+	return Client.Database("taskboard").Collection(collectionName)
 }

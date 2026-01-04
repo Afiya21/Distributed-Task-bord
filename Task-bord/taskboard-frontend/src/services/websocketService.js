@@ -21,11 +21,11 @@ class WebSocketService {
             try {
                 const data = JSON.parse(event.data);
                 // Notify all listeners
-                this.listeners.forEach(listener => listener(data.content));
+                this.listeners.forEach(listener => listener(data));
 
                 // Keep the alert as a fallback for now
-                const message = data.content.message || "New Notification";
-                alert(`New Notification: ${message}`);
+                // const message = data.message || "New Notification";
+                // alert(`New Notification: ${message}`);
             } catch (error) {
                 console.error('Error parsing notification:', error);
             }

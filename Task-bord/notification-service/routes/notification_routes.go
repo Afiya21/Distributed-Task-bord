@@ -1,7 +1,8 @@
 package routes
 
 import (
-	"net/http"
+	"context"
+	"net/http" // This import is not a duplicate. The instruction might be based on a misunderstanding or a malformed snippet.
 	"notification-service/db"
 	"notification-service/models"
 	"time"
@@ -22,10 +23,9 @@ func CreateNotification(c *gin.Context) {
 	// Set created time
 	notification.CreatedAt = time.Now().Format(time.RFC3339)
 
-	client, ctx, cancel := db.ConnectDB()
+	collection := db.GetCollection("notifications")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
-	collection := client.Database("taskboard").Collection("notifications")
 
 	// Insert the notification into the database
 	_, err := collection.InsertOne(ctx, notification)
@@ -40,10 +40,9 @@ func CreateNotification(c *gin.Context) {
 // Get all notifications for a user
 func GetNotifications(c *gin.Context) {
 	userID := c.Param("user_id")
-	client, ctx, cancel := db.ConnectDB()
+	collection := db.GetCollection("notifications")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
-	collection := client.Database("taskboard").Collection("notifications")
 
 	cursor, err := collection.Find(ctx, bson.M{"user_id": userID})
 	if err != nil {
@@ -63,10 +62,9 @@ func GetNotifications(c *gin.Context) {
 // MarkAsRead marks a notification as read
 func MarkAsRead(c *gin.Context) {
 	notificationID := c.Param("id")
-	client, ctx, cancel := db.ConnectDB()
+	collection := db.GetCollection("notifications")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
-	collection := client.Database("taskboard").Collection("notifications")
 
 	objID, err := primitive.ObjectIDFromHex(notificationID)
 	if err != nil {
