@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 import api from '../api';
 import Modal from '../components/Modal';
 
@@ -34,7 +35,9 @@ const RegisterPage = () => {
                 navigate('/login');
             }, 2000);
         } catch (err) {
-            setError(err.response?.data?.error || 'Registration failed');
+            const msg = err.response?.data?.error || 'Registration failed';
+            setError(msg);
+            toast.error(msg);
         }
     };
 

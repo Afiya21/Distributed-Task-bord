@@ -1,3 +1,5 @@
+import { toast } from 'react-hot-toast';
+
 const NOTIFICATION_SERVICE_URL = 'ws://localhost:8083/ws';
 
 class WebSocketService {
@@ -23,9 +25,17 @@ class WebSocketService {
                 // Notify all listeners
                 this.listeners.forEach(listener => listener(data));
 
-                // Keep the alert as a fallback for now
-                // const message = data.message || "New Notification";
-                // alert(`New Notification: ${message}`);
+                // Professional Toast Notification
+                if (data.message) {
+                    toast(data.message, {
+                        icon: '🔔',
+                        style: {
+                            background: 'var(--card-bg)',
+                            color: 'var(--text-primary)',
+                            border: '1px solid var(--border-color)',
+                        },
+                    });
+                }
             } catch (error) {
                 console.error('Error parsing notification:', error);
             }

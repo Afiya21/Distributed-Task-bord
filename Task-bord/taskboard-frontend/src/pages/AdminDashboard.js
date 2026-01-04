@@ -3,6 +3,7 @@ import api from '../api';
 import websocketService from '../services/websocketService';
 import Notifications from '../components/Notifications';
 import Modal from '../components/Modal';
+import { toast } from 'react-hot-toast';
 
 const AdminDashboard = () => {
     const [tasks, setTasks] = useState([]);
@@ -123,8 +124,10 @@ const AdminDashboard = () => {
             setCurrentSelection(''); // Reset dropdown
             setShowSuccess(true); // Show success modal
             setTimeout(() => setShowSuccess(false), 2000); // Auto close
+            toast.success('Task created successfully');
         } catch (err) {
             console.error('Failed to create task');
+            toast.error('Failed to create task');
         }
     };
 
@@ -134,8 +137,10 @@ const AdminDashboard = () => {
                 await api.updateUserRole(userId, 'admin');
                 // alert('User promoted successfully'); // Removed alert
                 fetchUsers();
+                toast.success('User promoted to Admin');
             } catch (err) {
                 console.error('Failed to promote user', err); // Replaced alert with console.error
+                toast.error('Failed to promote user');
             }
         }
     };

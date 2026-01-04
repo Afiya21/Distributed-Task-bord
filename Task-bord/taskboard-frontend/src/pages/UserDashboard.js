@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
+import { toast } from 'react-hot-toast';
 import api from '../api';
 import websocketService from '../services/websocketService';
 import Notifications from '../components/Notifications';
@@ -87,13 +88,19 @@ const UserDashboard = () => {
         }
     };
 
+    import { toast } from 'react-hot-toast';
+
+    // ... (imports remain)
+
     const handleStatusUpdate = async (taskId, newStatus) => {
         setLoading(true);
         try {
             await api.updateTaskStatus(taskId, newStatus, userId);
             fetchTasks(userId); // Refresh to see update
+            toast.success(`Task moved to ${newStatus.replace('_', ' ')}`);
         } catch (err) {
-            console.error('Failed to update status');
+            console.error('Failed to update status', err);
+            toast.error('Failed to update status');
         } finally {
             setLoading(false);
         }
@@ -225,8 +232,10 @@ const UserDashboard = () => {
                                 try {
                                     await api.updateUserProfile(userId, { username, theme });
                                     setTab('tasks'); // Redirect to main page
+                                    toast.success('Profile updated successfully');
                                 } catch (e) {
-                                    // alert('Failed to update profile'); 
+                                    console.error(e);
+                                    toast.error('Failed to update profile');
                                 }
                             }}>
                                 Save Changes

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 import api from '../api';
 import { jwtDecode } from 'jwt-decode';
 
@@ -25,6 +26,7 @@ const LoginPage = () => {
             }
         } catch (err) {
             setError('Invalid credentials');
+            toast.error('Invalid credentials');
         }
     };
 

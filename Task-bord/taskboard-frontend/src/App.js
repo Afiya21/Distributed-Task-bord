@@ -6,9 +6,12 @@ import AdminDashboard from './pages/AdminDashboard';
 import UserDashboard from './pages/UserDashboard';
 import './App.css';
 
+import { Toaster } from 'react-hot-toast';
+
 function App() {
   return (
     <Router>
+      <Toaster position="top-right" />
       <div className="App">
         {/* Navigation removed for cleaner auth flow, or keep consistent? */}
         {/* Let's keep it minimal or just remove generic links since we redirect */}
