@@ -53,3 +53,14 @@ cd taskboard-frontend && npm start
 
 ## 5. Environment Variables
 Ensure `.env` files exist in each service directory with valid `MONGO_URI` and `RABBITMQ_URL`.
+## 6. Test Credentials (for Proof/Demo)
+Role synchronization is implemented between Auth and User services.
+
+Admin User
+Email: Admin@test.com
+Password: @dminT3st
+(Note: If this user does not exist, please register a new user with these credentials and promote them to admin using the database or API)
+
+Regular User
+Email: ayat@gmail.com
+Password: Abcd123#
