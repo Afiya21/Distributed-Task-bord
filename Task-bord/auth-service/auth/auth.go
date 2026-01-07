@@ -167,7 +167,28 @@ func UpdateUserRole(userID, newRole string) error {
 	}
 
 	_, err = collection.UpdateOne(ctx, bson.M{"_id": objID}, update)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Publish UserRoleUpdated event
+	if RabbitClient != nil {
+		// Fetch user to get email and username which might be useful, though ID is enough for update
+		// For now, just sending ID and Role is sufficient for User Service to update
+		eventPayload := map[string]string{
+			"userId": userID,
+			"role":   newRole,
+		}
+		err = RabbitClient.Publish("", "user_queue", "UserRoleUpdated", eventPayload)
+		if err != nil {
+			fmt.Printf("Failed to publish UserRoleUpdated event: %v\n", err)
+			// Don't fail the HTTP request if publishing fails, just log it
+		} else {
+			fmt.Printf("Published UserRoleUpdated event for user %s\n", userID)
+		}
+	}
+
+	return nil
 }
 
 // Logout - Invalidate the session
