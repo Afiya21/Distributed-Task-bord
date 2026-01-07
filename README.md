@@ -57,10 +57,9 @@ Ensure `.env` files exist in each service directory with valid `MONGO_URI` and `
 Role synchronization is implemented between Auth and User services.
 
 Admin User
-Email: Admin@test.com
-Password: @dminT3st
-(Note: If this user does not exist, please register a new user with these credentials and promote them to admin using the database or API)
+Email: Admin@test.com .
+Password: @dminT3st .
 
 Regular User
-Email: ayat@gmail.com
-Password: Abcd123#
+Email: ayat@gmail.com .
+Password: Abcd123# .
